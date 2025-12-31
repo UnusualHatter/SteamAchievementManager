@@ -16,7 +16,7 @@ Steam Achievement Manager (SAM) is a lightweight, portable application used to m
 ## New Features (Scheduler Edition)
 
 - **Achievement Scheduler**: Schedule unlocks for specific date/time with queue system
-- **Background Execution**: Runs minimized in Windows system tray (NotifyIcon)
+- **Import/Export Schedules**: Backup your schedule lists to `.sam` files (JSON format) for easy sharing or migration.
 - **JSON Persistence**: Saves scheduled achievements to `%APPDATA%/SAM/ScheduledAchievements.json`
 - **Auto-Unlock Timer**: Checks every 30s and unlocks via SteamUserStats at scheduled time
 - **Tray Notifications**: Balloon tips when achievements unlock automatically
