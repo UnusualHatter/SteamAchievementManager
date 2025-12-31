@@ -390,3 +390,7 @@ FodyWeavers.xsd
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+# Cleanup
+Thumbs.db
+.DS_Store

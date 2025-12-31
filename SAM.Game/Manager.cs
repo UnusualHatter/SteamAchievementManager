@@ -27,11 +27,17 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using System.Net;
 using System.Windows.Forms;
 using static SAM.Game.InvariantShorthand;
 using APITypes = SAM.API.Types;
 using Microsoft.Win32;
+
+using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace SAM.Game
 {
@@ -52,18 +58,25 @@ namespace SAM.Game
 
         private readonly API.Callbacks.UserStatsReceived _UserStatsReceivedCallback;
 
-        //private API.Callback<APITypes.UserStatsStored> UserStatsStoredCallback;
+
+        private readonly System.Threading.ReaderWriterLockSlim _scheduledAchievementsLock = new();
 
         public Manager(long gameId, API.Client client)
         {
             this.InitializeComponent();
             this._ScheduleButton.Click += ScheduleButton_Click;
+
+            this._importButton.Click += ImportScheduleButton_Click;
+            this._exportButton.Click += ExportScheduleButton_Click;
+            this._clearImportedButton.Click += ClearImportedButton_Click;
+            this._jsonReportButton.Click += JsonReportButton_Click;
+            
             
             
             this._AchievementListView.OwnerDraw = false;
 
             this._MainTabControl.SelectedTab = this._AchievementsTabPage;
-            //this.statisticsList.Enabled = this.checkBox1.Checked;
+
 
             this._AchievementImageList.Images.Add("Blank", new Bitmap(64, 64));
 
@@ -107,19 +120,24 @@ namespace SAM.Game
             this._UserStatsReceivedCallback = client.CreateAndRegisterCallback<API.Callbacks.UserStatsReceived>();
             this._UserStatsReceivedCallback.OnRun += this.OnUserStatsReceived;
 
-            //this.UserStatsStoredCallback = new API.Callback(1102, new API.Callback.CallbackFunction(this.OnUserStatsStored));
+
+
+
 
             this.RefreshStats();
 
-            // Scheduler Init
+
+
             this._SchedulerDataGridView.DataSource = this._SchedulerList;
             this.LoadSchedules();
             this._SchedulerTimer.Enabled = true;
 
-            // Tray Setup
+
+
             this.Resize += this.OnManagerResize;
 
-            // Check startup status
+
+
             try
             {
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", false))
@@ -241,7 +259,7 @@ namespace SAM.Game
                     return false;
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return false;
             }
@@ -427,8 +445,8 @@ namespace SAM.Game
 
             var steamId = this._SteamClient.SteamUser.GetSteamId();
 
-            // This still triggers the UserStatsReceived callback, in addition to the callresult.
-            // No need to implement callresults for the time being.
+
+
             var callHandle = this._SteamClient.SteamUserStats.RequestUserStats(steamId);
             if (callHandle == API.CallHandle.Invalid)
             {
@@ -452,7 +470,7 @@ namespace SAM.Game
 
             this._AchievementListView.Items.Clear();
             this._AchievementListView.BeginUpdate();
-            //this.Achievements.Clear();
+
 
             bool wantLocked = this._DisplayLockedOnlyButton.Checked == true;
             bool wantUnlocked = this._DisplayUnlockedOnlyButton.Checked == true;
@@ -525,8 +543,8 @@ namespace SAM.Game
                     item.SubItems.Add(info.Description);
                 }
 
-                // Check if scheduled
-                var scheduled = this._SchedulerList.FirstOrDefault(s => s.AchievementId == def.Id && !s.IsUnlocked);
+            
+            var scheduled = this._SchedulerList.FirstOrDefault(s => s.AchievementId == def.Id && !s.IsUnlocked);
                 string unlockTimeText = "";
                 string statusText = "";
 
@@ -551,8 +569,9 @@ namespace SAM.Game
                     }
                 }
 
-                item.SubItems.Add(unlockTimeText); // Unlock Time
-                item.SubItems.Add(statusText);     // Status
+                item.SubItems.Add(unlockTimeText);
+                item.SubItems.Add(statusText);
+
 
                 info.ImageIndex = 0;
 
@@ -868,7 +887,7 @@ namespace SAM.Game
 
         private void OnAddSchedule(object sender, EventArgs e)
         {
-            // Gather available achievements
+
             List<Stats.AchievementInfo> available = new List<Stats.AchievementInfo>();
             foreach (ListViewItem item in this._AchievementListView.Items)
             {
@@ -944,8 +963,7 @@ namespace SAM.Game
                      {
                          item.IsUnlocked = true;
                          anyUnlocked = true;
-                         
-                         // Notify
+
                          this._TrayIcon.Visible = true;
                          this._TrayIcon.ShowBalloonTip(3000, "Achievement Unlocked", $"{item.AchievementName} unlocked!", ToolTipIcon.Info);
                      }
@@ -1131,6 +1149,169 @@ namespace SAM.Game
         internal void OnDrawSubItem(object sender, System.Windows.Forms.DrawListViewSubItemEventArgs e) 
         { 
             e.DrawDefault = true; 
+        }
+
+        private async void ExportScheduleButton_Click(object sender, EventArgs e)
+        {
+            using var sfd = new SaveFileDialog
+            {
+                Filter = "SAM Schedule Files (*.sam)|*.sam|JSON Files (*.json)|*.json",
+                FileName = $"SAM-Schedule-{DateTime.Now:yyyyMMdd-HHmm}.sam",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
+
+            if (sfd.ShowDialog() != DialogResult.OK) return;
+
+            try
+            {
+                _scheduledAchievementsLock.EnterWriteLock();
+                var exportList = _SchedulerList.Where(x => !x.IsUnlocked).ToList();
+
+                var exportData = new
+                {
+                    Metadata = new { Version = "1.0", ExportedAt = DateTime.Now, Total = exportList.Count },
+                    ScheduledAchievements = exportList
+                };
+
+                using (StreamWriter writer = File.CreateText(sfd.FileName))
+                {
+                    await writer.WriteAsync(JsonConvert.SerializeObject(exportData, new JsonSerializerSettings
+                    {
+                        Formatting = Formatting.Indented,
+                        ContractResolver = new CamelCasePropertyNamesContractResolver()
+                    }));
+                }
+
+                _TrayIcon.ShowBalloonTip(5000, "SAM Scheduler", $"✅ Exportado {exportList.Count} agendamentos para:\n{sfd.FileName}", ToolTipIcon.Info);
+                _GameStatusLabel.Text = $"Exportado: {exportList.Count} itens → {Path.GetFileName(sfd.FileName)}";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"❌ Erro no export: {ex.Message}\n\nDetalhes: {ex}", "Export Falhou", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally { _scheduledAchievementsLock.ExitWriteLock(); }
+        }
+
+        private async void ImportScheduleButton_Click(object sender, EventArgs e)
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Filter = "SAM Schedule Files (*.sam)|*.sam|JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
+
+            if (ofd.ShowDialog() != DialogResult.OK) return;
+
+            try
+            {
+                string json = "";
+                using (var reader = File.OpenText(ofd.FileName))
+                {
+                    json = await reader.ReadToEndAsync();
+                }
+
+                var token = JToken.Parse(json);
+
+                List<ScheduledAchievement> imported = new List<ScheduledAchievement>();
+
+                if (token is JObject obj)
+                {
+                    var property = obj.Properties().FirstOrDefault(p => string.Equals(p.Name, "ScheduledAchievements", StringComparison.OrdinalIgnoreCase) 
+                                                                     || string.Equals(p.Name, "achievements", StringComparison.OrdinalIgnoreCase));
+
+                    if (property != null)
+                    {
+                        imported = property.Value.ToObject<List<ScheduledAchievement>>();
+
+                        if (imported.Any() && imported.All(x => x.UnlockTime == default))
+                        {
+                            var serializer = new JsonSerializer { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+                            imported = property.Value.ToObject<List<ScheduledAchievement>>(serializer);
+                        }
+                    }
+                }
+                else if (token is JArray)
+                {
+                    imported = token.ToObject<List<ScheduledAchievement>>();
+
+                    if (imported.Any() && imported.All(x => x.UnlockTime == default))
+                    {
+                        var serializer = new JsonSerializer { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+                        imported = token.ToObject<List<ScheduledAchievement>>(serializer);
+                    }
+                }
+
+                int merged = 0, skipped = 0;
+                _scheduledAchievementsLock.EnterWriteLock();
+
+                foreach (var item in imported.Where(x => !x.IsUnlocked))
+                {
+
+                    item.GameId = (uint)this._GameId;
+
+                    if (!_SchedulerList.Any(x => x.AchievementId == item.AchievementId))
+                    {
+                        if (item.CreatedAt == default) item.CreatedAt = DateTime.Now;
+                        _SchedulerList.Add(item);
+                        merged++;
+                    }
+                    else skipped++;
+                }
+                
+                _scheduledAchievementsLock.ExitWriteLock();
+                
+                SaveSchedules();
+                
+                _TrayIcon.ShowBalloonTip(5000, "SAM Scheduler",
+                    $"✅ Importado: {merged} novos\n⚠️ Duplicados ignorados: {skipped}", ToolTipIcon.Info);
+
+                _GameStatusLabel.Text = $"Importado: {merged} | Duplicados: {skipped}";
+            }
+            catch (JsonException ex)
+            {
+                MessageBox.Show($"❌ Arquivo inválido (JSON corrompido):\n{ex.Message}", "Import Falhou", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"❌ Erro: {ex.Message}", "Import Falhou", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ClearImportedButton_Click(object sender, EventArgs e)
+        {
+             if (MessageBox.Show("Remover TODOS os agendamentos não-desbloqueados?\nIsso NÃO afeta conquistas já desbloqueadas.",
+            "Confirmar Limpeza", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            _scheduledAchievementsLock.EnterWriteLock();
+            
+            var toRemove = _SchedulerList.Where(x => !x.IsUnlocked).ToList();
+            foreach(var item in toRemove)
+            {
+                _SchedulerList.Remove(item);
+            }
+            int pendingCount = toRemove.Count;
+
+            _scheduledAchievementsLock.ExitWriteLock();
+
+            SaveSchedules();
+            
+            _GameStatusLabel.Text = $"🗑️ Removidos {pendingCount} agendamentos pendentes";
+        }
+
+        private void JsonReportButton_Click(object sender, EventArgs e)
+        {
+            string jsonPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SAM", "ScheduledAchievements.json");
+
+            if (!File.Exists(jsonPath))
+            {
+                MessageBox.Show("Nenhum agendamento salvo ainda!", "Relatório", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Process.Start("explorer.exe", $"/select,\"{jsonPath}\"");
+
+            if (MessageBox.Show("Abrir JSON no Bloco de Notas também?", "Relatório", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                Process.Start("notepad.exe", jsonPath);
         }
     }
 }

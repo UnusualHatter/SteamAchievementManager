@@ -70,6 +70,10 @@
             this._RemoveScheduleButton = new System.Windows.Forms.ToolStripButton();
             this._UnlockNowButton = new System.Windows.Forms.ToolStripButton();
             this._ClearScheduleButton = new System.Windows.Forms.ToolStripButton();
+            this._importButton = new System.Windows.Forms.ToolStripButton();
+            this._exportButton = new System.Windows.Forms.ToolStripButton();
+            this._clearImportedButton = new System.Windows.Forms.ToolStripButton();
+            this._jsonReportButton = new System.Windows.Forms.ToolStripButton();
             this._SchedulerTimer = new System.Windows.Forms.Timer(this.components);
             this._TrayIcon = new System.Windows.Forms.NotifyIcon(this.components);
             this._TrayContextMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -442,7 +446,12 @@
             this._AddScheduleButton,
             this._RemoveScheduleButton,
             this._UnlockNowButton,
-            this._ClearScheduleButton});
+            this._UnlockNowButton,
+            this._ClearScheduleButton,
+            this._importButton,
+            this._exportButton,
+            this._clearImportedButton,
+            this._jsonReportButton});
             this._SchedulerToolStrip.Location = new System.Drawing.Point(0, 0);
             this._SchedulerToolStrip.Name = "_SchedulerToolStrip";
             this._SchedulerToolStrip.Size = new System.Drawing.Size(688, 25);
@@ -484,6 +493,18 @@
             this._ClearScheduleButton.Size = new System.Drawing.Size(54, 22);
             this._ClearScheduleButton.Text = "Clear";
             this._ClearScheduleButton.Click += new System.EventHandler(this.OnClearSchedules);
+            
+            this._importButton.Text = "📥 Import";
+            this._importButton.BackColor = System.Drawing.Color.LightGreen;
+            
+            this._exportButton.Text = "📤 Export";
+            this._exportButton.BackColor = System.Drawing.Color.LightBlue;
+
+            this._clearImportedButton.Text = "🗑️ Clear Imp.";
+            this._clearImportedButton.BackColor = System.Drawing.Color.Orange;
+
+            this._jsonReportButton.Text = "📋 Report";
+            this._jsonReportButton.BackColor = System.Drawing.Color.LightGray;
             // 
             // _SchedulerTimer
             // 
@@ -605,6 +626,10 @@
         private System.Windows.Forms.ToolStripButton _RemoveScheduleButton;
         private System.Windows.Forms.ToolStripButton _UnlockNowButton;
         private System.Windows.Forms.ToolStripButton _ClearScheduleButton;
+        internal System.Windows.Forms.ToolStripButton _importButton;
+        internal System.Windows.Forms.ToolStripButton _exportButton;
+        internal System.Windows.Forms.ToolStripButton _clearImportedButton;
+        internal System.Windows.Forms.ToolStripButton _jsonReportButton;
         private System.Windows.Forms.Timer _SchedulerTimer;
         private System.Windows.Forms.NotifyIcon _TrayIcon;
         private System.Windows.Forms.ContextMenuStrip _TrayContextMenu;

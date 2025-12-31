@@ -27,6 +27,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <OutputPath>..\bin\</OutputPath>
@@ -37,9 +38,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Runtime.Serialization" />
     <PackageReference Include="System.Resources.Extensions" Version="8.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
   <ItemGroup>
     <Compile Update="DoubleBufferedListView.cs">
